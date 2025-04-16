@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="style.css">
+    <title>Пекарня</title>
+</head>
+<body>
+    <div id="app">
+        <header>
+            <div class="container">
+                <div class="header_inner">
+                    <div class="header_logo">
+                        <img src="img/logo.jpg" alt="Логотип пекарни" class="imglogo">
+                        <h1 class="text">Пекарня</h1>
+                    </div>
+                    <nav class="nav">
+                        <a class="nav_link" @click="openTab('products')">Меню</a>
+                        <a class="nav_link" @click="openTab('cart')">
+                            Корзина
+                            <span v-if="cart.length > 0" class="cart-count">{{ cartTotalQuantity }}</span>
+                        </a>
+                        <a class="nav_link" @click="openTab('orders')" v-if="orders.length > 0">Мои заказы</a>
+                    </nav>
+                </div>
+            </div>
+        </header>
+
+        <div class="intro">
+            <div v-if="activeTab === 'products'">
+                <div class="container_body">
+                    <p class="center">
+                        <img src="img/pekarni.jpg" alt="Пекарня" class="imgclass">
+                    </p>
+                </div>
+
+                <div class="container_opi">
+                    <p class="opisania center">
+                        Добро пожаловать в нашу пекарню! Мы рады приветствовать вас здесь, где витает аромат свежей выпечки и вкуснейших десертов.
+                    </p>
+                </div>
+                <div class="products_row">
+                    <div class="product_card" v-for="product in products" :key="product.id">
+                        <img :src="'img/' + product.image" :alt="product.name" class="imgtovar">
+                        <h3>{{ product.name }}</h3>
+                        <p class="opisania">{{ product.description }}</p>
+                        <p><strong>Цена: {{ product.price }} ₽</strong></p>
+                        <div v-if="isInCart(product.id)">
+                            <button class="btn" @click="decreaseQuantity(product.id)">-</button>
+                            <span>{{ getCartItem(product.id).quantity }}</span>
+                            <button class="btn" @click="increaseQuantity(product.id)">+</button>
+                            <button class="btn btn-danger" @click="removeFromCart(product.id)">Удалить</button>
+                        </div>
+                        <button v-else class="btn" @click="addToCart(product)">В корзину</button>
+                    </div>
+                </div>
+            </div>
+            <div v-if="activeTab === 'cart'">
+                <div class="container_opi">
+                    <h2 class="center">Ваша корзина</h2>
+                    <div v-if="cart.length === 0">
+                        <p class="center">Корзина пуста</p>
+                    </div>
+                    <div v-else>
+                        <div v-for="item in cart" :key="item.id" class="product_card" style="margin: 20px auto; max-width: 600px;">
+                            <div style="display: flex; align-items: center; gap: 20px;">
+                                <img :src="'img/' + getProduct(item.id).image" :alt="getProduct(item.id).name" style="width: 100px; height: 100px; border-radius: 10px;">
+                                <div style="flex-grow: 1; text-align: left;">
+                                    <h3>{{ getProduct(item.id).name }}</h3>
+                                    <p>Цена: {{ getProduct(item.id).price }} ₽ x {{ item.quantity }} = {{ getProduct(item.id).price * item.quantity }} ₽</p>
+                                </div>
+                                <div>
+                                    <button class="btn" @click="decreaseQuantity(item.id)">-</button>
+                                    <span>{{ item.quantity }}</span>
+                                    <button class="btn" @click="increaseQuantity(item.id)">+</button>
+                                    <button class="btn btn-danger" @click="removeFromCart(item.id)">Удалить</button>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="center" style="margin-top: 30px;">
+                            <h3>Итого: {{ cartTotal }} ₽</h3>
+                            <button class="btn" @click="openCheckoutModal" style="padding: 15px 30px; font-size: 18px;">Оформить заказ</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div v-if="activeTab === 'orders'">
+                <div class="container_opi">
+                    <h2 class="center">Мои заказы</h2>
+                    <div v-if="orders.length === 0">
+                        <p class="center">У вас нет завершенных заказов</p>
+                    </div>
+                    <div v-else>
+                        <div v-for="(order, index) in orders" :key="index" class="product_card" style="margin: 20px auto; max-width: 600px; text-align: left;">
+                            <h3>Заказ #{{ orders.length - index }} от {{ formatDate(order.date) }}</h3>
+                            <p><strong>Телефон:</strong> {{ order.phone }}</p>
+                            <p><strong>Сумма:</strong> {{ order.total }} ₽</p>
+                            <div v-for="item in order.items" :key="item.id" style="margin: 10px 0; padding: 10px; border-bottom: 1px solid #eee;">
+                                <p>{{ getProduct(item.id).name }} - {{ item.quantity }} x {{ getProduct(item.id).price }} ₽</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="modal, {active: showCheckoutModal}">
+            <div class="modal-content">
+                <h2 class="center">Оформление заказа</h2>
+
+                <div v-if="!orderProcessing">
+                    <div class="form-group">
+                        <label for="phone">Номер телефона</label>
+                        <input id="phone"
+                               class="form-control"
+                               v-model="phone"
+                               @input="formatPhone"
+                               placeholder="+7 (___) ___-__-__"
+                               maxlength="18">
+                    </div>
+
+                    <div class="center" style="margin-top: 30px;">
+                        <h3>Итого: {{ cartTotal }} ₽</h3>
+                        <button class="btn" @click="processOrder" style="padding: 15px 30px; font-size: 18px;">Подтвердить заказ</button>
+                        <button class="btn btn-danger" @click="showCheckoutModal = false" style="margin-left: 15px;">Отмена</button>
+                    </div>
+                </div>
+
+                <div v-else class="center">
+                    <div class="loader"></div>
+                    <h3>Обрабатываем ваш заказ...</h3>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <script>
+        const { createApp } = Vue;
+
+        createApp({
+            data() {
+                return {
+                    activeTab: 'products',
+                    products: [
+                        {
+                            id: 1,
+                            name: "Булочка",
+                            description: "Свежая и ароматная булочка - идеальный выбор для вашего завтрака или перекуса!",
+                            price: 50,
+                            image: "bulochka.jpg"
+                        },
+                        {
+                            id: 2,
+                            name: "Сосиска в тесте",
+                            description: "Приятный аромат, сочный и вкусный - наша сосиска в тесте порадует вас!",
+                            price: 80,
+                            image: "sosiska.jpg"
+                        },
+                        {
+                            id: 3,
+                            name: "Мини-пицца",
+                            description: "Мини-пицца - это маленький кулинарный шедевр, который порадует вашу палитру вкусов!",
+                            price: 120,
+                            image: "pizza.jpg"
+                        }
+                    ],
+                    cart: [],
+                    orders: [],
+                    showCheckoutModal: false,
+                    phone: '',
+                    orderProcessing: false
+                }
+            },
+            computed: {
+                cartTotal() {
+                    return this.cart.reduce((total, item) => {
+                        const product = this.getProduct(item.id);
+                        return total + (product.price * item.quantity);
+                    }, 0);
+                },
+                cartTotalQuantity() {
+                    return this.cart.reduce((total, item) => total + item.quantity, 0);
+                }
+            },
+            methods: {
+                openTab(tab) {
+                    this.activeTab = tab;
+                },
+                getProduct(id) {
+                    return this.products.find(p => p.id === id);
+                },
+                isInCart(id) {
+                    return this.cart.some(item => item.id === id);
+                },
+                getCartItem(id) {
+                    return this.cart.find(item => item.id === id);
+                },
+                addToCart(product) {
+                    const existingItem = this.getCartItem(product.id);
+                    if (existingItem) {
+                        existingItem.quantity++;
+                    } else {
+                        this.cart.push({
+                            id: product.id,
+                            quantity: 1
+                        });
+                    }
+                    this.saveCart();
+                },
+                increaseQuantity(id) {
+                    const item = this.getCartItem(id);
+                    if (item) {
+                        item.quantity++;
+                        this.saveCart();
+                    }
+                },
+                decreaseQuantity(id) {
+                    const item = this.getCartItem(id);
+                    if (item && item.quantity > 1) {
+                        item.quantity--;
+                    } else {
+                        this.removeFromCart(id);
+                    }
+                    this.saveCart();
+                },
+                removeFromCart(id) {
+                    this.cart = this.cart.filter(item => item.id !== id);
+                    this.saveCart();
+                },
+                openCheckoutModal() {
+                    this.phone = '';
+                    this.showCheckoutModal = true;
+                    this.orderProcessing = false;
+                },
+                formatPhone() {
+                    let x = this.phone.replace(/\D/g, '').match(/(\d{0,1})(\d{0,3})(\d{0,3})(\d{0,2})(\d{0,2})/);
+                    this.phone = !x[2] ? x[1] : '+' + x[1] + ' (' + x[2] + (x[3] ? ') ' + x[3] : '') + (x[4] ? '-' + x[4] : '') + (x[5] ? '-' + x[5] : '');
+                },
+                processOrder() {
+                    if (!this.phone || this.phone.length < 18) {
+                        alert('Пожалуйста, введите корректный номер телефона');
+                        return;
+                    }
+
+                    this.orderProcessing = true;
+                    setTimeout(() => {
+                        const newOrder = {
+                            date: new Date(),
+                            phone: this.phone,
+                            total: this.cartTotal,
+                            items: [...this.cart]
+                        };
+
+                        this.orders.unshift(newOrder);
+                        this.cart = [];
+                        this.saveCart();
+                        this.saveOrders();
+
+                        this.orderProcessing = false;
+                        this.showCheckoutModal = false;
+                        this.activeTab = 'orders';
+                    }, 2000);
+                },
+                formatDate(date) {
+                    return new Date(date).toLocaleString();
+                },
+                saveCart() {
+                    localStorage.setItem('bakeryCart', JSON.stringify(this.cart));
+                },
+                loadCart() {
+                    const cart = localStorage.getItem('bakeryCart');
+                    if (cart) {
+                        this.cart = JSON.parse(cart);
+                    }
+                },
+                saveOrders() {
+                    localStorage.setItem('bakeryOrders', JSON.stringify(this.orders));
+                },
+                loadOrders() {
+                    const orders = localStorage.getItem('bakeryOrders');
+                    if (orders) {
+                        this.orders = JSON.parse(orders);
+                    }
+                }
+            },
+            mounted() {
+                this.loadCart();
+                this.loadOrders();
+            }
+        }).mount('#app');
+    </script>
+</body>
+</html>
